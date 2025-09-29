@@ -1,0 +1,11 @@
+# frozen_string_literal: true
+
+require_relative "vitals/version"
+require_relative "vitals/config"
+require_relative "vitals/vital_result"
+require_relative "vitals/health_report"
+require_relative "vitals/vitals/base_vital"
+
+module Vitals
+  class Error < StandardError; end
+end
