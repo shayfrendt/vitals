@@ -437,6 +437,8 @@ end
 
 ## Implementation Plan
 
+**IMPORTANT**: Only add dependencies to `vitals.gemspec` when you actually need them in the current phase. Do not add dependencies for future phases.
+
 ### Phase 1: Project Setup & Foundation (2 hours)
 
 1. Initialize Ruby gem structure: `bundle gem vitals`
@@ -451,41 +453,7 @@ end
 
 **Completion criteria**: All base classes have unit tests passing
 
-### Phase 2: Implement Individual Vitals (6 hours)
-
-#### 2.1 Complexity Vital
-- Create `lib/vitals/vitals/complexity_vital.rb`
-- Wrap RuboCop's `Metrics/CyclomaticComplexity` cop
-- Integrate Flog for ABC complexity
-- Create `spec/vitals/vitals/complexity_vital_spec.rb`
-
-#### 2.2 Smells Vital
-- Create `lib/vitals/vitals/smells_vital.rb`
-- Wrap Reek for code smell detection
-- Integrate RubyCritic for overall quality score
-- Create `spec/vitals/vitals/smells_vital_spec.rb`
-
-#### 2.3 Coverage Vital
-- Create `lib/vitals/vitals/coverage_vital.rb`
-- Parse SimpleCov's `.resultset.json`
-- Create `spec/vitals/vitals/coverage_vital_spec.rb`
-
-**Completion criteria**: All vitals can analyze code and unit tests pass
-
-### Phase 3: Orchestration & Scoring (2 hours)
-
-1. Create `lib/vitals/orchestrator.rb`
-   - Initialize with config and selected vitals
-   - Run vitals in parallel where possible
-   - Collect all VitalResult objects
-2. Update `lib/vitals/health_report.rb`
-   - Calculate weighted overall score
-   - Determine health status
-3. Create tests
-
-**Completion criteria**: Orchestrator can run all vitals and aggregate results
-
-### Phase 4: CLI Interface (2 hours)
+### Phase 2: CLI Interface (2 hours)
 
 1. Create `lib/vitals/cli.rb` using Thor
 2. Implement commands:
@@ -499,6 +467,40 @@ end
 5. Create `bin/vitals` executable
 
 **Completion criteria**: All CLI commands work and parse correctly
+
+### Phase 3: Implement Individual Vitals (6 hours)
+
+#### 3.1 Complexity Vital
+- Create `lib/vitals/vitals/complexity_vital.rb`
+- Wrap RuboCop's `Metrics/CyclomaticComplexity` cop
+- Integrate Flog for ABC complexity
+- Create `spec/vitals/vitals/complexity_vital_spec.rb`
+
+#### 3.2 Smells Vital
+- Create `lib/vitals/vitals/smells_vital.rb`
+- Wrap Reek for code smell detection
+- Integrate RubyCritic for overall quality score
+- Create `spec/vitals/vitals/smells_vital_spec.rb`
+
+#### 3.3 Coverage Vital
+- Create `lib/vitals/vitals/coverage_vital.rb`
+- Parse SimpleCov's `.resultset.json`
+- Create `spec/vitals/vitals/coverage_vital_spec.rb`
+
+**Completion criteria**: All vitals can analyze code and unit tests pass
+
+### Phase 4: Orchestration & Scoring (2 hours)
+
+1. Create `lib/vitals/orchestrator.rb`
+   - Initialize with config and selected vitals
+   - Run vitals in parallel where possible
+   - Collect all VitalResult objects
+2. Update `lib/vitals/health_report.rb`
+   - Calculate weighted overall score
+   - Determine health status
+3. Create tests
+
+**Completion criteria**: Orchestrator can run all vitals and aggregate results
 
 ### Phase 5: Reporters (4 hours)
 
@@ -593,6 +595,8 @@ Before marking implementation complete:
 - **Phase 8**: 2 hours (documentation)
 
 **Total**: ~22 hours of development time
+
+**Note**: CLI moved to Phase 2 to enable early testing and validation of the tool's interface.
 
 ---
 

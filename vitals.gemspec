@@ -20,15 +20,27 @@ Gem::Specification.new do |spec|
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   spec.files = Dir.chdir(__dir__) do
     `git ls-files -z`.split("\x0").reject do |f|
-      (f == __FILE__) || f.match(%r{\A(?:(?:bin|test|spec|features)/|\.(?:git|circleci)|appveyor)})
+      (f == __FILE__) || f.match(%r{\A(?:(?:test|spec|features)/|\.(?:git|circleci)|appveyor)})
     end
   end
-  spec.bindir = "exe"
-  spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
+  spec.bindir = "bin"
+  spec.executables = ["vitals"]
   spec.require_paths = ["lib"]
 
-  # Uncomment to register a new dependency of your gem
-  # spec.add_dependency "example-gem", "~> 1.0"
+  # CLI framework
+  spec.add_dependency "thor", "~> 1.3"
+
+  # Analysis tools - add these in Phase 3 when implementing vitals
+  # spec.add_dependency "rubocop", "~> 1.60"
+  # spec.add_dependency "reek", "~> 6.3"
+  # spec.add_dependency "rubycritic", "~> 4.9"
+  # spec.add_dependency "flog", "~> 4.8"
+  # spec.add_dependency "simplecov", "~> 0.22"
+
+  # CLI formatting - add these in Phase 5 when implementing reporters
+  # spec.add_dependency "tty-box", "~> 0.7"
+  # spec.add_dependency "tty-table", "~> 0.12"
+  # spec.add_dependency "pastel", "~> 0.8"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

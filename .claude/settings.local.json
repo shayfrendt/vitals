@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(./bin/vitals:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
