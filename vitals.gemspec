@@ -30,12 +30,12 @@ Gem::Specification.new do |spec|
   # CLI framework
   spec.add_dependency "thor", "~> 1.3"
 
-  # Analysis tools - add these in Phase 3 when implementing vitals
-  # spec.add_dependency "rubocop", "~> 1.60"
-  # spec.add_dependency "reek", "~> 6.3"
-  # spec.add_dependency "rubycritic", "~> 4.9"
-  # spec.add_dependency "flog", "~> 4.8"
-  # spec.add_dependency "simplecov", "~> 0.22"
+  # Analysis tools (Phase 3)
+  spec.add_dependency "rubocop", "~> 1.60"
+  spec.add_dependency "reek", "~> 6.3"
+  spec.add_dependency "rubycritic", "~> 4.9"
+  spec.add_dependency "flog", "~> 4.8"
+  spec.add_dependency "simplecov", "~> 0.22"
 
   # CLI formatting - add these in Phase 5 when implementing reporters
   # spec.add_dependency "tty-box", "~> 0.7"

@@ -5,6 +5,9 @@ require_relative "vitals/config"
 require_relative "vitals/vital_result"
 require_relative "vitals/health_report"
 require_relative "vitals/vitals/base_vital"
+require_relative "vitals/vitals/complexity_vital"
+require_relative "vitals/vitals/smells_vital"
+require_relative "vitals/vitals/coverage_vital"
 require_relative "vitals/cli"
 
 module Vitals

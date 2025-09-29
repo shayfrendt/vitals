@@ -23,46 +23,107 @@ module Vitals
       puts "🏥 Running vitals check on: #{File.expand_path(path)}"
       puts "━" * 50
 
-      # For now, just show that the CLI is working
-      # We'll implement the actual checks in Phase 3
-      puts "\n✓ CLI interface working!"
-      puts "\nConfiguration loaded:"
-      puts "  Complexity threshold: #{config.complexity[:threshold]}"
-      puts "  Smells threshold: #{config.smells[:threshold]}"
-      puts "  Coverage threshold: #{config.coverage[:threshold]}"
-      puts "  Format: #{options[:format]}"
+      results = {}
 
-      exit 0
+      # Run complexity check
+      puts "\n🧠 Checking complexity..."
+      complexity_vital = Vitals::ComplexityVital.new(config: config)
+      results[:complexity] = complexity_vital.check(path: path)
+
+      # Run smells check
+      puts "\n👃 Checking code smells..."
+      smells_vital = Vitals::SmellsVital.new(config: config)
+      results[:smells] = smells_vital.check(path: path)
+
+      # Run coverage check (may fail if no coverage data)
+      puts "\n🛡️  Checking test coverage..."
+      begin
+        coverage_vital = Vitals::CoverageVital.new(config: config)
+        results[:coverage] = coverage_vital.check(path: path)
+      rescue Error => e
+        puts "  ⚠️  #{e.message}"
+        results[:coverage] = nil
+      end
+
+      # Display summary
+      puts "\n" + "━" * 50
+      puts "📊 SUMMARY"
+      puts "━" * 50
+
+      all_healthy = true
+      results.each do |vital_name, result|
+        next if result.nil?
+
+        vital = case vital_name
+                when :complexity then complexity_vital
+                when :smells then smells_vital
+                when :coverage then coverage_vital
+                end
+
+        status = result.healthy?(threshold: vital.threshold) ? "🟢 PASS" : "🔴 FAIL"
+        puts "\n#{vital_name.to_s.capitalize}: #{status}"
+        puts "  Score: #{result.score}/100 (threshold: #{vital.threshold})"
+        puts "  Violations: #{result.violations.length}"
+
+        all_healthy = false unless result.healthy?(threshold: vital.threshold)
+      end
+
+      puts "\n" + "━" * 50
+      exit all_healthy ? 0 : 1
     rescue StandardError => e
       handle_error(e)
     end
 
     desc "complexity [PATH]", "Check code complexity"
     def complexity(path = ".")
+      config = load_config
+      apply_option_overrides(config)
+
       puts "🧠 Checking complexity in: #{File.expand_path(path)}"
-      puts "\n✓ Complexity check CLI working!"
-      puts "(Implementation coming in Phase 3)"
-      exit 0
+      puts "━" * 50
+
+      vital = Vitals::ComplexityVital.new(config: config)
+      result = vital.check(path: path)
+
+      display_result(result, config)
+
+      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
       handle_error(e)
     end
 
     desc "smells [PATH]", "Check code smells"
     def smells(path = ".")
+      config = load_config
+      apply_option_overrides(config)
+
       puts "👃 Checking code smells in: #{File.expand_path(path)}"
-      puts "\n✓ Smells check CLI working!"
-      puts "(Implementation coming in Phase 3)"
-      exit 0
+      puts "━" * 50
+
+      vital = Vitals::SmellsVital.new(config: config)
+      result = vital.check(path: path)
+
+      display_result(result, config)
+
+      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
       handle_error(e)
     end
 
     desc "coverage [PATH]", "Check test coverage"
     def coverage(path = ".")
+      config = load_config
+      apply_option_overrides(config)
+
       puts "🛡️  Checking test coverage in: #{File.expand_path(path)}"
-      puts "\n✓ Coverage check CLI working!"
-      puts "(Implementation coming in Phase 3)"
-      exit 0
+      puts "━" * 50
+
+      vital = Vitals::CoverageVital.new(config: config)
+      result = vital.check(path: path)
+
+      display_result(result, config)
+
+      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
       handle_error(e)
     end
@@ -108,6 +169,27 @@ module Vitals
       if options[:coverage_threshold]
         config.coverage[:threshold] = options[:coverage_threshold]
       end
+    end
+
+    def display_result(result, config)
+      puts "\n📊 Result:"
+      puts "  Score: #{result.score}/100"
+      puts "  Status: #{result.healthy?(threshold: result.score >= 80 ? 80 : 0) ? '🟢 HEALTHY' : '🔴 NEEDS ATTENTION'}"
+      puts "  Violations: #{result.violations.length}"
+
+      if result.violations.any? && result.violations.length <= 10
+        puts "\n⚠️  Top violations:"
+        result.violations.take(10).each do |violation|
+          puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
+        end
+      elsif result.violations.length > 10
+        puts "\n⚠️  #{result.violations.length} violations found (showing first 10):"
+        result.violations.take(10).each do |violation|
+          puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
+        end
+      end
+
+      puts "\n✓ Analysis complete"
     end
 
     def handle_error(error)
