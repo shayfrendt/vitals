@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "thor"
+require "json"
 require_relative "../vitals"
 
 module Vitals
@@ -23,49 +24,33 @@ module Vitals
       puts "🏥 Running vitals check on: #{File.expand_path(path)}"
       puts "━" * 50
 
-      results = {}
-
-      # Run complexity check
-      puts "\n🧠 Checking complexity..."
-      complexity_vital = Vitals::ComplexityVital.new(config: config)
-      results[:complexity] = complexity_vital.check(path: path)
-
-      # Run smells check
-      puts "\n👃 Checking code smells..."
-      smells_vital = Vitals::SmellsVital.new(config: config)
-      results[:smells] = smells_vital.check(path: path)
-
-      # Run coverage check (may fail if no coverage data)
-      puts "\n🛡️  Checking test coverage..."
-      begin
-        coverage_vital = Vitals::CoverageVital.new(config: config)
-        results[:coverage] = coverage_vital.check(path: path)
-      rescue Error => e
-        puts "  ⚠️  #{e.message}"
-        results[:coverage] = nil
-      end
+      orchestrator = Orchestrator.new(config: config)
+      report = orchestrator.run(path: path)
 
       # Display summary
       puts "\n" + "━" * 50
-      puts "📊 SUMMARY"
+      puts "📊 HEALTH REPORT"
       puts "━" * 50
 
+      puts "\n Overall Score: #{report.overall_score}/100 (#{report.health_status.to_s.upcase.tr('_', ' ')})"
+
       all_healthy = true
-      results.each do |vital_name, result|
-        next if result.nil?
+      report.vital_results.each do |result|
+        threshold = threshold_for_vital(result.vital, config)
+        status = result.healthy?(threshold: threshold) ? "🟢 PASS" : "🔴 FAIL"
 
-        vital = case vital_name
-                when :complexity then complexity_vital
-                when :smells then smells_vital
-                when :coverage then coverage_vital
-                end
-
-        status = result.healthy?(threshold: vital.threshold) ? "🟢 PASS" : "🔴 FAIL"
-        puts "\n#{vital_name.to_s.capitalize}: #{status}"
-        puts "  Score: #{result.score}/100 (threshold: #{vital.threshold})"
+        puts "\n#{result.vital.to_s.capitalize}: #{status}"
+        puts "  Score: #{result.score}/100 (threshold: #{threshold})"
         puts "  Violations: #{result.violations.length}"
 
-        all_healthy = false unless result.healthy?(threshold: vital.threshold)
+        all_healthy = false unless result.healthy?(threshold: threshold)
+      end
+
+      if report.recommendations.any?
+        puts "\n💡 Recommendations:"
+        report.recommendations.each do |rec|
+          puts "  • #{rec}"
+        end
       end
 
       puts "\n" + "━" * 50
@@ -131,11 +116,23 @@ module Vitals
     desc "report [PATH]", "Generate full health report"
     def report(path = ".")
       config = load_config
+      apply_option_overrides(config)
 
       puts "📊 Generating health report for: #{File.expand_path(path)}"
       puts "━" * 50
-      puts "\n✓ Report generation CLI working!"
-      puts "(Full report coming in Phase 5)"
+
+      orchestrator = Orchestrator.new(config: config)
+      report = orchestrator.run(path: path)
+
+      # Output in requested format
+      case options[:format]
+      when "json"
+        puts JSON.pretty_generate(report.to_h)
+      when "html"
+        puts "HTML format not yet implemented (Phase 5)"
+      else
+        display_cli_report(report, config)
+      end
 
       exit 0
     rescue StandardError => e
@@ -190,6 +187,57 @@ module Vitals
       end
 
       puts "\n✓ Analysis complete"
+    end
+
+    def display_cli_report(report, config)
+      puts "\n╔═══════════════════════════════════════════╗"
+      puts "║   CODEBASE HEALTH REPORT                  ║"
+      puts "╠═══════════════════════════════════════════╣"
+      puts "║   Overall Score: #{report.overall_score}/100"
+      puts "║   Status: #{status_emoji(report.health_status)} #{report.health_status.to_s.upcase.tr('_', ' ')}"
+      puts "╠═══════════════════════════════════════════╣"
+
+      report.vital_results.each do |result|
+        threshold = threshold_for_vital(result.vital, config)
+        status = result.healthy?(threshold: threshold) ? "🟢" : "🔴"
+        puts "║   #{result.vital.to_s.capitalize} Vital: #{status} #{result.score}/100"
+      end
+
+      puts "╠═══════════════════════════════════════════╣"
+
+      if report.recommendations.any?
+        puts "║   Recommendations:"
+        report.recommendations.each do |rec|
+          puts "║   • #{rec}"
+        end
+      else
+        puts "║   ✓ All vitals are healthy!"
+      end
+
+      puts "╚═══════════════════════════════════════════╝"
+    end
+
+    def status_emoji(status)
+      case status
+      when :excellent then "🟢"
+      when :good then "🟢"
+      when :needs_improvement then "🟡"
+      when :high_risk then "🔴"
+      else "⚪"
+      end
+    end
+
+    def threshold_for_vital(vital, config)
+      case vital
+      when :complexity
+        config.complexity[:threshold]
+      when :smells
+        config.smells[:threshold]
+      when :coverage
+        config.coverage[:threshold]
+      else
+        0
+      end
     end
 
     def handle_error(error)
