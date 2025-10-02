@@ -118,9 +118,6 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      puts "📊 Generating health report for: #{File.expand_path(path)}"
-      puts "━" * 50
-
       orchestrator = Orchestrator.new(config: config)
       report = orchestrator.run(path: path)
 
@@ -129,8 +126,11 @@ module Vitals
       when "json"
         puts JSON.pretty_generate(report.to_h)
       when "html"
-        puts "HTML format not yet implemented (Phase 5)"
+        warn "📊 Generating health report for: #{File.expand_path(path)}"
+        warn "HTML format not yet implemented (Phase 5)"
       else
+        puts "📊 Generating health report for: #{File.expand_path(path)}"
+        puts "━" * 50
         display_cli_report(report, config)
       end
 
