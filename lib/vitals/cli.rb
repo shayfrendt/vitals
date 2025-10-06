@@ -51,13 +51,20 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      puts "🧠 Checking complexity in: #{File.expand_path(path)}"
-      puts "━" * 50
-
       vital = Vitals::ComplexityVital.new(config: config)
       result = vital.check(path: path)
 
-      display_result(result, config)
+      # Create a single-vital report for formatting
+      health_report = HealthReport.new(vital_results: [result], config: config)
+      reporter = create_reporter(health_report, config)
+
+      if options[:format] == "cli"
+        puts "🧠 Checking complexity in: #{File.expand_path(path)}"
+        puts "━" * 50
+        display_result(result, config)
+      else
+        puts reporter.render
+      end
 
       exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
@@ -69,13 +76,20 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      puts "👃 Checking code smells in: #{File.expand_path(path)}"
-      puts "━" * 50
-
       vital = Vitals::SmellsVital.new(config: config)
       result = vital.check(path: path)
 
-      display_result(result, config)
+      # Create a single-vital report for formatting
+      health_report = HealthReport.new(vital_results: [result], config: config)
+      reporter = create_reporter(health_report, config)
+
+      if options[:format] == "cli"
+        puts "👃 Checking code smells in: #{File.expand_path(path)}"
+        puts "━" * 50
+        display_result(result, config)
+      else
+        puts reporter.render
+      end
 
       exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
@@ -87,13 +101,20 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      puts "🛡️  Checking test coverage in: #{File.expand_path(path)}"
-      puts "━" * 50
-
       vital = Vitals::CoverageVital.new(config: config)
       result = vital.check(path: path)
 
-      display_result(result, config)
+      # Create a single-vital report for formatting
+      health_report = HealthReport.new(vital_results: [result], config: config)
+      reporter = create_reporter(health_report, config)
+
+      if options[:format] == "cli"
+        puts "🛡️  Checking test coverage in: #{File.expand_path(path)}"
+        puts "━" * 50
+        display_result(result, config)
+      else
+        puts reporter.render
+      end
 
       exit result.healthy?(threshold: vital.threshold) ? 0 : 1
     rescue StandardError => e
