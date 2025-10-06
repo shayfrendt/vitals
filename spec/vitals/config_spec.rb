@@ -5,9 +5,9 @@ RSpec.describe Vitals::Config do
     it "loads default configuration" do
       config = described_class.new
 
-      expect(config.complexity[:threshold]).to eq(10)
+      expect(config.complexity[:threshold]).to eq(90)
       expect(config.smells[:threshold]).to eq(80)
-      expect(config.coverage[:threshold]).to eq(80)
+      expect(config.coverage[:threshold]).to eq(90)
     end
 
     it "applies overrides to default configuration" do

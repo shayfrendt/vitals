@@ -41,7 +41,7 @@ RSpec.describe Vitals::Vitals::BaseVital do
       vital = test_vital_class.new(config: config)
       allow(vital).to receive(:name).and_return(:complexity)
 
-      expect(vital.threshold).to eq(10)
+      expect(vital.threshold).to eq(90)
     end
 
     it "returns smells threshold for smells vital" do
@@ -55,7 +55,7 @@ RSpec.describe Vitals::Vitals::BaseVital do
       vital = test_vital_class.new(config: config)
       allow(vital).to receive(:name).and_return(:coverage)
 
-      expect(vital.threshold).to eq(80)
+      expect(vital.threshold).to eq(90)
     end
   end
 

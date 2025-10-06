@@ -6,7 +6,7 @@ module Vitals
   class Config
     DEFAULT_CONFIG = {
       complexity: {
-        threshold: 10,
+        threshold: 90,
         exclude: []
       },
       smells: {
@@ -14,7 +14,7 @@ module Vitals
         enabled_detectors: :all
       },
       coverage: {
-        threshold: 80,
+        threshold: 90,
         require_branch_coverage: false
       },
       output: {
