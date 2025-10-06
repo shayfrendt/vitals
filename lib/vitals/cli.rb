@@ -21,39 +21,26 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      puts "🏥 Running vitals check on: #{File.expand_path(path)}"
-      puts "━" * 50
-
       orchestrator = Orchestrator.new(config: config)
-      report = orchestrator.run(path: path)
+      health_report = orchestrator.run(path: path)
 
-      # Display summary
-      puts "\n" + "━" * 50
-      puts "📊 HEALTH REPORT"
-      puts "━" * 50
+      # Render output based on format
+      reporter = create_reporter(health_report, config)
 
-      puts "\n Overall Score: #{report.overall_score}/100 (#{report.health_status.to_s.upcase.tr('_', ' ')})"
+      if options[:format] == "cli"
+        puts "🏥 Running vitals check on: #{File.expand_path(path)}"
+        puts "━" * 50
+        puts "\n#{reporter.render_summary}"
+      else
+        puts reporter.render
+      end
 
-      all_healthy = true
-      report.vital_results.each do |result|
+      # Determine exit code
+      all_healthy = health_report.vital_results.all? do |result|
         threshold = threshold_for_vital(result.vital, config)
-        status = result.healthy?(threshold: threshold) ? "🟢 PASS" : "🔴 FAIL"
-
-        puts "\n#{result.vital.to_s.capitalize}: #{status}"
-        puts "  Score: #{result.score}/100 (threshold: #{threshold})"
-        puts "  Violations: #{result.violations.length}"
-
-        all_healthy = false unless result.healthy?(threshold: threshold)
+        result.healthy?(threshold: threshold)
       end
 
-      if report.recommendations.any?
-        puts "\n💡 Recommendations:"
-        report.recommendations.each do |rec|
-          puts "  • #{rec}"
-        end
-      end
-
-      puts "\n" + "━" * 50
       exit all_healthy ? 0 : 1
     rescue StandardError => e
       handle_error(e)
@@ -119,19 +106,19 @@ module Vitals
       apply_option_overrides(config)
 
       orchestrator = Orchestrator.new(config: config)
-      report = orchestrator.run(path: path)
+      health_report = orchestrator.run(path: path)
 
-      # Output in requested format
-      case options[:format]
-      when "json"
-        puts JSON.pretty_generate(report.to_h)
-      when "html"
-        warn "📊 Generating health report for: #{File.expand_path(path)}"
-        warn "HTML format not yet implemented (Phase 5)"
-      else
+      # Render output based on format
+      reporter = create_reporter(health_report, config)
+
+      if options[:format] == "cli"
         puts "📊 Generating health report for: #{File.expand_path(path)}"
         puts "━" * 50
-        display_cli_report(report, config)
+        puts "\n#{reporter.render}"
+      elsif options[:format] == "html"
+        warn "HTML format not yet implemented (Phase 5)"
+      else
+        puts reporter.render
       end
 
       exit 0
@@ -189,41 +176,15 @@ module Vitals
       puts "\n✓ Analysis complete"
     end
 
-    def display_cli_report(report, config)
-      puts "\n╔═══════════════════════════════════════════╗"
-      puts "║   CODEBASE HEALTH REPORT                  ║"
-      puts "╠═══════════════════════════════════════════╣"
-      puts "║   Overall Score: #{report.overall_score}/100"
-      puts "║   Status: #{status_emoji(report.health_status)} #{report.health_status.to_s.upcase.tr('_', ' ')}"
-      puts "╠═══════════════════════════════════════════╣"
-
-      report.vital_results.each do |result|
-        threshold = threshold_for_vital(result.vital, config)
-        status = result.healthy?(threshold: threshold) ? "🟢" : "🔴"
-        puts "║   #{result.vital.to_s.capitalize} Vital: #{status} #{result.score}/100"
-      end
-
-      puts "╠═══════════════════════════════════════════╣"
-
-      if report.recommendations.any?
-        puts "║   Recommendations:"
-        report.recommendations.each do |rec|
-          puts "║   • #{rec}"
-        end
+    def create_reporter(report, config)
+      case options[:format]
+      when "json"
+        Reporters::JsonReporter.new(report: report, config: config)
+      when "html"
+        # HTML reporter not implemented yet
+        Reporters::CliReporter.new(report: report, config: config)
       else
-        puts "║   ✓ All vitals are healthy!"
-      end
-
-      puts "╚═══════════════════════════════════════════╝"
-    end
-
-    def status_emoji(status)
-      case status
-      when :excellent then "🟢"
-      when :good then "🟢"
-      when :needs_improvement then "🟡"
-      when :high_risk then "🔴"
-      else "⚪"
+        Reporters::CliReporter.new(report: report, config: config)
       end
     end
 

@@ -9,6 +9,9 @@ require_relative "vitals/vitals/complexity_vital"
 require_relative "vitals/vitals/smells_vital"
 require_relative "vitals/vitals/coverage_vital"
 require_relative "vitals/orchestrator"
+require_relative "vitals/reporters/base_reporter"
+require_relative "vitals/reporters/cli_reporter"
+require_relative "vitals/reporters/json_reporter"
 require_relative "vitals/cli"
 
 module Vitals
