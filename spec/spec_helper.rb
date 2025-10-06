@@ -1,5 +1,16 @@
 # frozen_string_literal: true
 
+# Start SimpleCov before loading application code
+require "simplecov"
+SimpleCov.start do
+  add_filter "/spec/"
+  add_filter "/bin/"
+
+  add_group "Vitals", "lib/vitals/vitals"
+  add_group "Reporters", "lib/vitals/reporters"
+  add_group "Core", "lib/vitals"
+end
+
 require "vitals"
 
 RSpec.configure do |config|
