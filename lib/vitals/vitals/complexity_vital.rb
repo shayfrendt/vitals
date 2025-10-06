@@ -89,38 +89,51 @@ module Vitals
         files = data["files"] || []
 
         offenses = []
-        total_complexity = 0
-        total_methods = 0
+        complexity_data = { total: 0, count: 0 }
 
-        files.each do |file|
-          next unless file["offenses"]
+        files.each { |file| process_file_offenses(file, offenses, complexity_data) }
 
-          file["offenses"].each do |offense|
-            next unless complexity_cop?(offense["cop_name"])
+        build_rubocop_results(offenses, complexity_data)
+      rescue JSON::ParserError
+        default_rubocop_results
+      end
 
-            offenses << {
-              file: file["path"],
-              line: offense["location"]["start_line"],
-              cop: offense["cop_name"],
-              message: offense["message"],
-              severity: offense["severity"]
-            }
+      def process_file_offenses(file, offenses, complexity_data)
+        return unless file["offenses"]
 
-            # Extract complexity number from message if available
-            if offense["message"] =~ /complexity of (\d+)/
-              total_complexity += $1.to_i
-              total_methods += 1
-            end
-          end
+        file["offenses"].each do |offense|
+          next unless complexity_cop?(offense["cop_name"])
+
+          offenses << build_offense(file["path"], offense)
+          extract_complexity(offense["message"], complexity_data)
         end
+      end
+
+      def build_offense(path, offense)
+        {
+          file: path,
+          line: offense["location"]["start_line"],
+          cop: offense["cop_name"],
+          message: offense["message"],
+          severity: offense["severity"]
+        }
+      end
+
+      def extract_complexity(message, complexity_data)
+        return unless message =~ /complexity of (\d+)/
+
+        complexity_data[:total] += $1.to_i
+        complexity_data[:count] += 1
+      end
+
+      def build_rubocop_results(offenses, complexity_data)
+        method_count = complexity_data[:count].positive? ? complexity_data[:count] : offenses.length
 
         {
           offenses: offenses,
-          total_complexity: total_complexity,
-          total_methods: total_methods > 0 ? total_methods : offenses.length
+          total_complexity: complexity_data[:total],
+          total_methods: method_count
         }
-      rescue JSON::ParserError
-        default_rubocop_results
       end
 
       def default_rubocop_results

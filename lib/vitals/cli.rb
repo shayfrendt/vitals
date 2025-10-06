@@ -21,27 +21,11 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      orchestrator = Orchestrator.new(config: config)
-      health_report = orchestrator.run(path: path)
-
-      # Render output based on format
+      health_report = run_orchestrator(config, path)
       reporter = create_reporter(health_report, config)
 
-      if options[:format] == "cli"
-        puts "🏥 Running vitals check on: #{File.expand_path(path)}"
-        puts "━" * 50
-        puts "\n#{reporter.render_summary}"
-      else
-        puts reporter.render
-      end
-
-      # Determine exit code
-      all_healthy = health_report.vital_results.all? do |result|
-        threshold = threshold_for_vital(result.vital, config)
-        result.healthy?(threshold: threshold)
-      end
-
-      exit all_healthy ? 0 : 1
+      display_check_output(path, reporter)
+      exit determine_exit_code(health_report, config)
     rescue StandardError => e
       handle_error(e)
     end
@@ -66,22 +50,10 @@ module Vitals
       config = load_config
       apply_option_overrides(config)
 
-      orchestrator = Orchestrator.new(config: config)
-      health_report = orchestrator.run(path: path)
-
-      # Render output based on format
+      health_report = run_orchestrator(config, path)
       reporter = create_reporter(health_report, config)
 
-      if options[:format] == "cli"
-        puts "📊 Generating health report for: #{File.expand_path(path)}"
-        puts "━" * 50
-        puts "\n#{reporter.render}"
-      elsif options[:format] == "html"
-        warn "HTML format not yet implemented (Phase 5)"
-      else
-        puts reporter.render
-      end
-
+      display_report_output(path, reporter)
       exit 0
     rescue StandardError => e
       handle_error(e)
@@ -189,6 +161,41 @@ module Vitals
       else
         0
       end
+    end
+
+    def run_orchestrator(config, path)
+      orchestrator = Orchestrator.new(config: config)
+      orchestrator.run(path: path)
+    end
+
+    def display_check_output(path, reporter)
+      if options[:format] == "cli"
+        puts "🏥 Running vitals check on: #{File.expand_path(path)}"
+        puts "━" * 50
+        puts "\n#{reporter.render_summary}"
+      else
+        puts reporter.render
+      end
+    end
+
+    def display_report_output(path, reporter)
+      if options[:format] == "cli"
+        puts "📊 Generating health report for: #{File.expand_path(path)}"
+        puts "━" * 50
+        puts "\n#{reporter.render}"
+      elsif options[:format] == "html"
+        warn "HTML format not yet implemented (Phase 5)"
+      else
+        puts reporter.render
+      end
+    end
+
+    def determine_exit_code(health_report, config)
+      all_healthy = health_report.vital_results.all? do |result|
+        threshold = threshold_for_vital(result.vital, config)
+        result.healthy?(threshold: threshold)
+      end
+      all_healthy ? 0 : 1
     end
 
     def handle_error(error)
