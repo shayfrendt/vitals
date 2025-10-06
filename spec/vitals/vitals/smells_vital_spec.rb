@@ -153,4 +153,38 @@ RSpec.describe Vitals::Vitals::SmellsVital do
       expect(vital.threshold).to eq(config.smells[:threshold])
     end
   end
+
+  describe "edge cases" do
+    it "handles empty directory gracefully" do
+      Dir.mktmpdir do |dir|
+        result = vital.check(path: dir)
+        expect(result.score).to eq(100) # No files = perfect score
+      end
+    end
+
+    it "calculates score from reek when rubycritic fails" do
+      temp_dir = Dir.mktmpdir
+      file = File.join(temp_dir, "test.rb")
+      File.write(file, "class Test; def foo; @x = 1; end; end")
+
+      # Allow reek to run but simulate rubycritic failure
+      allow_any_instance_of(described_class).to receive(:run_rubycritic).and_return(nil)
+
+      result = vital.check(path: file)
+      expect(result.score).to be_a(Numeric)
+      expect(result.metadata[:rubycritic_score]).to be_nil
+      FileUtils.rm_rf(temp_dir)
+    end
+
+    it "handles reek errors gracefully" do
+      temp_dir = Dir.mktmpdir
+      file = File.join(temp_dir, "invalid.rb")
+      File.write(file, "class Test")
+
+      # Even with syntax errors, it should not crash
+      result = vital.check(path: file)
+      expect(result).to be_a(Vitals::VitalResult)
+      FileUtils.rm_rf(temp_dir)
+    end
+  end
 end

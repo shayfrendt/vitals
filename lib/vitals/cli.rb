@@ -48,77 +48,17 @@ module Vitals
 
     desc "complexity [PATH]", "Check code complexity"
     def complexity(path = ".")
-      config = load_config
-      apply_option_overrides(config)
-
-      vital = Vitals::ComplexityVital.new(config: config)
-      result = vital.check(path: path)
-
-      # Create a single-vital report for formatting
-      health_report = HealthReport.new(vital_results: [result], config: config)
-      reporter = create_reporter(health_report, config)
-
-      if options[:format] == "cli"
-        puts "🧠 Checking complexity in: #{File.expand_path(path)}"
-        puts "━" * 50
-        display_result(result, config)
-      else
-        puts reporter.render
-      end
-
-      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
-    rescue StandardError => e
-      handle_error(e)
+      run_single_vital(Vitals::ComplexityVital, path, "🧠 Checking complexity in")
     end
 
     desc "smells [PATH]", "Check code smells"
     def smells(path = ".")
-      config = load_config
-      apply_option_overrides(config)
-
-      vital = Vitals::SmellsVital.new(config: config)
-      result = vital.check(path: path)
-
-      # Create a single-vital report for formatting
-      health_report = HealthReport.new(vital_results: [result], config: config)
-      reporter = create_reporter(health_report, config)
-
-      if options[:format] == "cli"
-        puts "👃 Checking code smells in: #{File.expand_path(path)}"
-        puts "━" * 50
-        display_result(result, config)
-      else
-        puts reporter.render
-      end
-
-      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
-    rescue StandardError => e
-      handle_error(e)
+      run_single_vital(Vitals::SmellsVital, path, "👃 Checking code smells in")
     end
 
     desc "coverage [PATH]", "Check test coverage"
     def coverage(path = ".")
-      config = load_config
-      apply_option_overrides(config)
-
-      vital = Vitals::CoverageVital.new(config: config)
-      result = vital.check(path: path)
-
-      # Create a single-vital report for formatting
-      health_report = HealthReport.new(vital_results: [result], config: config)
-      reporter = create_reporter(health_report, config)
-
-      if options[:format] == "cli"
-        puts "🛡️  Checking test coverage in: #{File.expand_path(path)}"
-        puts "━" * 50
-        display_result(result, config)
-      else
-        puts reporter.render
-      end
-
-      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
-    rescue StandardError => e
-      handle_error(e)
+      run_single_vital(Vitals::CoverageVital, path, "🛡️  Checking test coverage in")
     end
 
     desc "report [PATH]", "Generate full health report"
@@ -176,25 +116,54 @@ module Vitals
       end
     end
 
-    def display_result(result, config)
-      puts "\n📊 Result:"
-      puts "  Score: #{result.score}/100"
-      puts "  Status: #{result.healthy?(threshold: result.score >= 80 ? 80 : 0) ? '🟢 HEALTHY' : '🔴 NEEDS ATTENTION'}"
-      puts "  Violations: #{result.violations.length}"
+    def run_single_vital(vital_class, path, header)
+      config = load_config
+      apply_option_overrides(config)
 
-      if result.violations.any? && result.violations.length <= 10
-        puts "\n⚠️  Top violations:"
-        result.violations.take(10).each do |violation|
-          puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
-        end
-      elsif result.violations.length > 10
-        puts "\n⚠️  #{result.violations.length} violations found (showing first 10):"
-        result.violations.take(10).each do |violation|
-          puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
-        end
+      vital = vital_class.new(config: config)
+      result = vital.check(path: path)
+
+      health_report = HealthReport.new(vital_results: [result], config: config)
+      reporter = create_reporter(health_report, config)
+
+      if options[:format] == "cli"
+        puts "#{header}: #{File.expand_path(path)}"
+        puts "━" * 50
+        display_result(result)
+      else
+        puts reporter.render
       end
 
+      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
+    rescue StandardError => e
+      handle_error(e)
+    end
+
+    def display_result(result)
+      threshold = result.score >= 80 ? 80 : 0
+      status = result.healthy?(threshold: threshold) ? "🟢 HEALTHY" : "🔴 NEEDS ATTENTION"
+
+      puts "\n📊 Result:"
+      puts "  Score: #{result.score}/100"
+      puts "  Status: #{status}"
+      puts "  Violations: #{result.violations.length}"
+
+      return unless result.violations.any?
+
+      display_violations(result.violations)
       puts "\n✓ Analysis complete"
+    end
+
+    def display_violations(violations)
+      if violations.length <= 10
+        puts "\n⚠️  Top violations:"
+      else
+        puts "\n⚠️  #{violations.length} violations found (showing first 10):"
+      end
+
+      violations.take(10).each do |violation|
+        puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
+      end
     end
 
     def create_reporter(report, config)

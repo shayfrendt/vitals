@@ -49,11 +49,12 @@ module Vitals
     private
 
     def load_config(config_path)
+      base = Marshal.load(Marshal.dump(DEFAULT_CONFIG))
       if config_path && File.exist?(config_path)
         file_config = YAML.load_file(config_path, symbolize_names: true)
-        deep_merge(DEFAULT_CONFIG, file_config)
+        deep_merge(base, file_config)
       else
-        DEFAULT_CONFIG.dup
+        base
       end
     end
 
