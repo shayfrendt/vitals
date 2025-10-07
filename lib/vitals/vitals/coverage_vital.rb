@@ -8,31 +8,45 @@ module Vitals
     class CoverageVital < BaseVital
       def check(path:)
         expanded_path = File.expand_path(path)
-
-        unless File.exist?(expanded_path)
-          raise Error, "Path does not exist: #{expanded_path}"
-        end
+        validate_path(expanded_path)
 
         coverage_data = find_coverage_data(expanded_path)
+        validate_coverage_data(coverage_data)
 
-        if coverage_data.nil?
-          raise Error, "No coverage data found. Run your tests with SimpleCov enabled first."
-        end
+        build_coverage_result(coverage_data, expanded_path)
+      end
 
+      def validate_path(path)
+        return if File.exist?(path)
+
+        raise Error, "Path does not exist: #{path}"
+      end
+
+      def validate_coverage_data(coverage_data)
+        return unless coverage_data.nil?
+
+        raise Error, "No coverage data found. Run your tests with SimpleCov enabled first."
+      end
+
+      def build_coverage_result(coverage_data, path)
         score = coverage_data[:line_coverage]
-        violations = identify_uncovered_files(coverage_data, expanded_path)
+        violations = identify_uncovered_files(coverage_data, path)
 
         create_result(
           score: score,
           violations: violations,
-          metadata: {
-            line_coverage: coverage_data[:line_coverage],
-            branch_coverage: coverage_data[:branch_coverage],
-            total_lines: coverage_data[:total_lines],
-            covered_lines: coverage_data[:covered_lines],
-            uncovered_critical_paths: violations.take(10)
-          }
+          metadata: build_coverage_metadata(coverage_data, violations)
         )
+      end
+
+      def build_coverage_metadata(coverage_data, violations)
+        {
+          line_coverage: coverage_data[:line_coverage],
+          branch_coverage: coverage_data[:branch_coverage],
+          total_lines: coverage_data[:total_lines],
+          covered_lines: coverage_data[:covered_lines],
+          uncovered_critical_paths: violations.take(10)
+        }
       end
 
       private
@@ -74,7 +88,7 @@ module Vitals
         coverage_data = result_set["coverage"] || {}
         files_data, total_lines, covered_lines = process_coverage_data(coverage_data)
 
-        build_coverage_result(total_lines, covered_lines, files_data)
+        build_parsed_result(total_lines, covered_lines, files_data)
       rescue JSON::ParserError, StandardError
         nil
       end
@@ -129,7 +143,7 @@ module Vitals
         (covered.to_f / total * 100).round(2)
       end
 
-      def build_coverage_result(total_lines, covered_lines, files_data)
+      def build_parsed_result(total_lines, covered_lines, files_data)
         line_coverage = calculate_percentage(covered_lines, total_lines)
 
         {

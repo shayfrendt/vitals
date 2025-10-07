@@ -10,36 +10,58 @@ module Vitals
     class ComplexityVital < BaseVital
       def check(path:)
         expanded_path = File.expand_path(path)
-
-        unless File.exist?(expanded_path)
-          raise Error, "Path does not exist: #{expanded_path}"
-        end
+        validate_path_exists(expanded_path)
 
         rubocop_results = run_rubocop_complexity(expanded_path)
         flog_results = run_flog(expanded_path)
 
+        build_complexity_result(rubocop_results, flog_results)
+      end
+
+      def validate_path_exists(path)
+        return if File.exist?(path)
+
+        raise Error, "Path does not exist: #{path}"
+      end
+
+      def build_complexity_result(rubocop_results, flog_results)
         score = calculate_score(rubocop_results, flog_results)
         violations = extract_violations(rubocop_results)
 
         create_result(
           score: score,
           violations: violations,
-          metadata: {
-            average_complexity: calculate_average(rubocop_results),
-            methods_over_threshold: count_violations(rubocop_results),
-            worst_offenders: top_offenders(rubocop_results, limit: 10),
-            total_methods_analyzed: rubocop_results[:total_methods],
-            flog_average: flog_results[:average],
-            flog_total: flog_results[:total]
-          }
+          metadata: build_complexity_metadata(rubocop_results, flog_results)
         )
+      end
+
+      def build_complexity_metadata(rubocop_results, flog_results)
+        {
+          average_complexity: calculate_average(rubocop_results),
+          methods_over_threshold: count_violations(rubocop_results),
+          worst_offenders: top_offenders(rubocop_results, limit: 10),
+          total_methods_analyzed: rubocop_results[:total_methods],
+          flog_average: flog_results[:average],
+          flog_total: flog_results[:total]
+        }
       end
 
       private
 
       def run_rubocop_complexity(path)
-        # Create a temporary config file to only run complexity cops
-        config_content = <<~YAML
+        Tempfile.create(["rubocop_config", ".yml"]) do |config_file|
+          write_rubocop_config(config_file)
+          run_rubocop_with_config(path, config_file.path)
+        end
+      end
+
+      def write_rubocop_config(config_file)
+        config_file.write(rubocop_config_content)
+        config_file.flush
+      end
+
+      def rubocop_config_content
+        <<~YAML
           AllCops:
             NewCops: disable
 
@@ -55,31 +77,28 @@ module Vitals
             Enabled: true
             Max: 15
         YAML
+      end
 
-        Tempfile.create(["rubocop_config", ".yml"]) do |config_file|
-          config_file.write(config_content)
-          config_file.flush
+      def run_rubocop_with_config(path, config_path)
+        options = { formatters: [["json", nil]], config: config_path }
+        runner = RuboCop::Runner.new(options, RuboCop::ConfigStore.new)
 
-          options = {
-            formatters: [["json", nil]],
-            config: config_file.path
-          }
+        output = capture_rubocop_output { runner.run([path]) }
+        parse_rubocop_output(output)
+      end
 
-          runner = RuboCop::Runner.new(options, RuboCop::ConfigStore.new)
+      def capture_rubocop_output
+        output = StringIO.new
+        original_stdout = $stdout
+        $stdout = output
 
-          # Capture output
-          output = StringIO.new
-          original_stdout = $stdout
-          $stdout = output
-
-          begin
-            runner.run([path])
-          ensure
-            $stdout = original_stdout
-          end
-
-          parse_rubocop_output(output.string)
+        begin
+          yield
+        ensure
+          $stdout = original_stdout
         end
+
+        output.string
       end
 
       def parse_rubocop_output(json_output)
