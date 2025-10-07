@@ -64,42 +64,51 @@ module Vitals
         # RubyCritic writes to filesystem, so we'll capture its score
         # Run in a temporary directory to avoid polluting the project
         Dir.mktmpdir do |tmpdir|
-          old_dir = Dir.pwd
-          begin
-            # Change to temp dir to avoid creating tmp/rubycritic in the project
-            Dir.chdir(tmpdir)
-
-            # Run RubyCritic programmatically
-            paths = if File.directory?(path)
-                      Dir.glob(File.join(path, "**", "*.rb"))
-                    else
-                      [path]
-                    end
-
-            return nil if paths.empty?
-
-            # Run RubyCritic analysis
-            analyser = RubyCritic::AnalysersRunner.new(paths)
-            analysed_modules = analyser.run
-
-            # Calculate average score
-            if analysed_modules.any?
-              total_score = analysed_modules.sum { |mod| mod.rating.to_f }
-              average_rating = total_score / analysed_modules.length
-
-              # Convert rating (A=4, B=3, C=2, D=1, F=0) to 0-100 scale
-              # A=100, B=75, C=50, D=25, F=0
-              (average_rating * 25).round
-            else
-              100 # No modules to analyze means perfect score
-            end
-          ensure
-            Dir.chdir(old_dir)
-          end
+          in_temp_dir(tmpdir) { analyze_with_rubycritic(path) }
         end
-      rescue StandardError => e
+      rescue StandardError
         # If RubyCritic fails, return nil to fall back to Reek-based scoring
         nil
+      end
+
+      def in_temp_dir(tmpdir)
+        old_dir = Dir.pwd
+        Dir.chdir(tmpdir)
+        yield
+      ensure
+        Dir.chdir(old_dir)
+      end
+
+      def analyze_with_rubycritic(path)
+        paths = collect_ruby_files(path)
+        return nil if paths.empty?
+
+        analysed_modules = run_rubycritic_analysis(paths)
+        calculate_rubycritic_score(analysed_modules)
+      end
+
+      def collect_ruby_files(path)
+        if File.directory?(path)
+          Dir.glob(File.join(path, "**", "*.rb"))
+        else
+          [path]
+        end
+      end
+
+      def run_rubycritic_analysis(paths)
+        analyser = RubyCritic::AnalysersRunner.new(paths)
+        analyser.run
+      end
+
+      def calculate_rubycritic_score(analysed_modules)
+        return 100 if analysed_modules.empty? # No modules to analyze means perfect score
+
+        total_score = analysed_modules.sum { |mod| mod.rating.to_f }
+        average_rating = total_score / analysed_modules.length
+
+        # Convert rating (A=4, B=3, C=2, D=1, F=0) to 0-100 scale
+        # A=100, B=75, C=50, D=25, F=0
+        (average_rating * 25).round
       end
 
       def calculate_score_from_reek(reek_results)

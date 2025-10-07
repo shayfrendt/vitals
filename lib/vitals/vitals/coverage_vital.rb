@@ -68,43 +68,69 @@ module Vitals
 
       def parse_resultset(resultset_path)
         data = JSON.parse(File.read(resultset_path))
-
-        # SimpleCov stores results under different keys (RSpec, etc.)
-        # Get the first result set
-        result_set = data.values.first
+        result_set = extract_result_set(data)
         return nil unless result_set
 
         coverage_data = result_set["coverage"] || {}
+        files_data, total_lines, covered_lines = process_coverage_data(coverage_data)
 
+        build_coverage_result(total_lines, covered_lines, files_data)
+      rescue JSON::ParserError, StandardError
+        nil
+      end
+
+      def extract_result_set(data)
+        # SimpleCov stores results under different keys (RSpec, etc.)
+        data.values.first
+      end
+
+      def process_coverage_data(coverage_data)
+        files_data = []
         total_lines = 0
         covered_lines = 0
-        files_data = []
 
         coverage_data.each do |file_path, file_coverage|
           next if file_coverage.nil? || file_coverage.empty?
 
-          # Handle both array format (line coverage) and hash format (branch coverage)
-          lines = if file_coverage.is_a?(Hash)
-                    file_coverage["lines"] || []
-                  else
-                    file_coverage
-                  end
-
-          file_total = lines.compact.length
-          file_covered = lines.count { |hits| hits && hits > 0 }
-
-          total_lines += file_total
-          covered_lines += file_covered
-
-          files_data << {
-            file: file_path,
-            total_lines: file_total,
-            covered_lines: file_covered,
-            coverage_percent: file_total > 0 ? (file_covered.to_f / file_total * 100).round(2) : 100
-          }
+          file_data = process_file_coverage(file_path, file_coverage)
+          files_data << file_data
+          total_lines += file_data[:total_lines]
+          covered_lines += file_data[:covered_lines]
         end
 
-        line_coverage = total_lines > 0 ? (covered_lines.to_f / total_lines * 100).round(2) : 100
+        [files_data, total_lines, covered_lines]
+      end
+
+      def process_file_coverage(file_path, file_coverage)
+        lines = extract_lines(file_coverage)
+        file_total = lines.compact.length
+        file_covered = lines.count { |hits| hits && hits.positive? }
+
+        {
+          file: file_path,
+          total_lines: file_total,
+          covered_lines: file_covered,
+          coverage_percent: calculate_percentage(file_covered, file_total)
+        }
+      end
+
+      def extract_lines(file_coverage)
+        # Handle both array format (line coverage) and hash format (branch coverage)
+        if file_coverage.is_a?(Hash)
+          file_coverage["lines"] || []
+        else
+          file_coverage
+        end
+      end
+
+      def calculate_percentage(covered, total)
+        return 100 if total.zero?
+
+        (covered.to_f / total * 100).round(2)
+      end
+
+      def build_coverage_result(total_lines, covered_lines, files_data)
+        line_coverage = calculate_percentage(covered_lines, total_lines)
 
         {
           line_coverage: line_coverage,
@@ -113,8 +139,6 @@ module Vitals
           covered_lines: covered_lines,
           files: files_data
         }
-      rescue JSON::ParserError, StandardError => e
-        nil
       end
 
       def identify_uncovered_files(coverage_data, path)
