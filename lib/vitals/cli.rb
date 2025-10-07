@@ -75,40 +75,61 @@ module Vitals
     end
 
     def apply_option_overrides(config)
-      if options[:complexity_threshold]
-        config.complexity[:threshold] = options[:complexity_threshold]
-      end
+      override_threshold(config.complexity, :complexity_threshold)
+      override_threshold(config.smells, :smells_threshold)
+      override_threshold(config.coverage, :coverage_threshold)
+    end
 
-      if options[:smells_threshold]
-        config.smells[:threshold] = options[:smells_threshold]
-      end
+    def override_threshold(vital_config, option_key)
+      return unless options[option_key]
 
-      if options[:coverage_threshold]
-        config.coverage[:threshold] = options[:coverage_threshold]
-      end
+      vital_config[:threshold] = options[option_key]
     end
 
     def run_single_vital(vital_class, path, header)
+      config = load_configured_config
+      result = execute_vital_check(vital_class, config, path)
+      reporter = build_reporter_for_result(result, config)
+
+      display_vital_output(result, reporter, path, header)
+      exit_with_vital_status(result, vital_class, config)
+    rescue StandardError => e
+      handle_error(e)
+    end
+
+    def load_configured_config
       config = load_config
       apply_option_overrides(config)
+      config
+    end
 
+    def execute_vital_check(vital_class, config, path)
       vital = vital_class.new(config: config)
-      result = vital.check(path: path)
+      vital.check(path: path)
+    end
 
+    def build_reporter_for_result(result, config)
       health_report = HealthReport.new(vital_results: [result], config: config)
-      reporter = create_reporter(health_report, config)
+      create_reporter(health_report, config)
+    end
 
+    def display_vital_output(result, reporter, path, header)
       if options[:format] == "cli"
-        puts "#{header}: #{File.expand_path(path)}"
-        puts "━" * 50
-        display_result(result)
+        display_cli_vital_output(result, path, header)
       else
         puts reporter.render
       end
+    end
 
+    def display_cli_vital_output(result, path, header)
+      puts "#{header}: #{File.expand_path(path)}"
+      puts "━" * 50
+      display_result(result)
+    end
+
+    def exit_with_vital_status(result, vital_class, config)
+      vital = vital_class.new(config: config)
       exit result.healthy?(threshold: vital.threshold) ? 0 : 1
-    rescue StandardError => e
-      handle_error(e)
     end
 
     def display_result(result)
