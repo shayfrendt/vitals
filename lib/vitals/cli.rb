@@ -3,6 +3,12 @@
 require "thor"
 require "json"
 require_relative "../vitals"
+require_relative "cli/config_manager"
+require_relative "cli/display_helper"
+require_relative "cli/threshold_helper"
+require_relative "cli/reporter_factory"
+require_relative "cli/vital_runner"
+require_relative "cli/output_formatter"
 
 module Vitals
   class CLI < Thor
@@ -18,14 +24,13 @@ module Vitals
     option :smells_threshold, type: :numeric, desc: "Override smells threshold"
     option :coverage_threshold, type: :numeric, desc: "Override coverage threshold"
     def check(path = ".")
-      config = load_config
-      apply_option_overrides(config)
-
+      config = config_manager.load_with_overrides
       health_report = run_orchestrator(config, path)
-      reporter = create_reporter(health_report, config)
+      reporter = CLIReporterFactory.create(format: options[:format], report: health_report, config: config)
+      formatter = CLIOutputFormatter.new(format: options[:format], path: path, reporter: reporter)
 
-      display_check_output(path, reporter)
-      exit determine_exit_code(health_report, config)
+      formatter.display_check
+      exit CLIThresholdHelper.exit_code_for(health_report, config)
     rescue StandardError => e
       handle_error(e)
     end
@@ -47,13 +52,12 @@ module Vitals
 
     desc "report [PATH]", "Generate full health report"
     def report(path = ".")
-      config = load_config
-      apply_option_overrides(config)
-
+      config = config_manager.load_with_overrides
       health_report = run_orchestrator(config, path)
-      reporter = create_reporter(health_report, config)
+      reporter = CLIReporterFactory.create(format: options[:format], report: health_report, config: config)
+      formatter = CLIOutputFormatter.new(format: options[:format], path: path, reporter: reporter)
 
-      display_report_output(path, reporter)
+      formatter.display_report
       exit 0
     rescue StandardError => e
       handle_error(e)
@@ -66,157 +70,26 @@ module Vitals
 
     private
 
-    def load_config
-      config_path = options[:config]
-      if config_path && !File.exist?(config_path)
-        warn "⚠️  Config file not found: #{config_path}"
-      end
-      Config.new(config_path: config_path)
-    end
-
-    def apply_option_overrides(config)
-      override_threshold(config.complexity, :complexity_threshold)
-      override_threshold(config.smells, :smells_threshold)
-      override_threshold(config.coverage, :coverage_threshold)
-    end
-
-    def override_threshold(vital_config, option_key)
-      return unless options[option_key]
-
-      vital_config[:threshold] = options[option_key]
+    def config_manager
+      @config_manager ||= CLIConfigManager.new(options)
     end
 
     def run_single_vital(vital_class, path, header)
-      config = load_configured_config
-      result = execute_vital_check(vital_class, config, path)
-      reporter = build_reporter_for_result(result, config)
+      config = config_manager.load_with_overrides
+      runner = CLIVitalRunner.new(vital_class: vital_class, config: config, path: path)
+      result = runner.execute
+      reporter = runner.reporter_for(result)
+      formatter = CLIOutputFormatter.new(format: options[:format], path: path, reporter: reporter)
 
-      display_vital_output(result, reporter, path, header)
-      exit_with_vital_status(result, vital_class, config)
+      formatter.display_vital(result, header)
+      exit runner.exit_status_for(result)
     rescue StandardError => e
       handle_error(e)
-    end
-
-    def load_configured_config
-      config = load_config
-      apply_option_overrides(config)
-      config
-    end
-
-    def execute_vital_check(vital_class, config, path)
-      vital = vital_class.new(config: config)
-      vital.check(path: path)
-    end
-
-    def build_reporter_for_result(result, config)
-      health_report = HealthReport.new(vital_results: [result], config: config)
-      create_reporter(health_report, config)
-    end
-
-    def display_vital_output(result, reporter, path, header)
-      if options[:format] == "cli"
-        display_cli_vital_output(result, path, header)
-      else
-        puts reporter.render
-      end
-    end
-
-    def display_cli_vital_output(result, path, header)
-      puts "#{header}: #{File.expand_path(path)}"
-      puts "━" * 50
-      display_result(result)
-    end
-
-    def exit_with_vital_status(result, vital_class, config)
-      vital = vital_class.new(config: config)
-      exit result.healthy?(threshold: vital.threshold) ? 0 : 1
-    end
-
-    def display_result(result)
-      threshold = result.score >= 80 ? 80 : 0
-      status = result.healthy?(threshold: threshold) ? "🟢 HEALTHY" : "🔴 NEEDS ATTENTION"
-
-      puts "\n📊 Result:"
-      puts "  Score: #{result.score}/100"
-      puts "  Status: #{status}"
-      puts "  Violations: #{result.violations.length}"
-
-      return unless result.violations.any?
-
-      display_violations(result.violations)
-      puts "\n✓ Analysis complete"
-    end
-
-    def display_violations(violations)
-      if violations.length <= 10
-        puts "\n⚠️  Top violations:"
-      else
-        puts "\n⚠️  #{violations.length} violations found (showing first 10):"
-      end
-
-      violations.take(10).each do |violation|
-        puts "  • #{violation[:file]}:#{violation[:line]} - #{violation[:message] || violation[:type]}"
-      end
-    end
-
-    def create_reporter(report, config)
-      case options[:format]
-      when "json"
-        Reporters::JsonReporter.new(report: report, config: config)
-      when "html"
-        # HTML reporter not implemented yet
-        Reporters::CliReporter.new(report: report, config: config)
-      else
-        Reporters::CliReporter.new(report: report, config: config)
-      end
-    end
-
-    def threshold_for_vital(vital, config)
-      case vital
-      when :complexity
-        config.complexity[:threshold]
-      when :smells
-        config.smells[:threshold]
-      when :coverage
-        config.coverage[:threshold]
-      else
-        0
-      end
     end
 
     def run_orchestrator(config, path)
       orchestrator = Orchestrator.new(config: config)
       orchestrator.run(path: path)
-    end
-
-    def display_check_output(path, reporter)
-      if options[:format] == "cli"
-        puts "🏥 Running vitals check on: #{File.expand_path(path)}"
-        puts "━" * 50
-        puts "\n#{reporter.render_summary}"
-      else
-        puts reporter.render
-      end
-    end
-
-    def display_report_output(path, reporter)
-      if options[:format] == "cli"
-        puts "📊 Generating health report for: #{File.expand_path(path)}"
-        puts "━" * 50
-        puts "\n#{reporter.render}"
-      elsif options[:format] == "html"
-        warn "HTML format not yet implemented (Phase 5)"
-      else
-        puts reporter.render
-      end
-    end
-
-    def determine_exit_code(health_report, config)
-      all_healthy = health_report.vital_results.all? do |result|
-        threshold = threshold_for_vital(result.vital, config)
-        result.healthy?(threshold: threshold)
-      end
-      all_healthy ? 0 : 1
     end
 
     def handle_error(error)
